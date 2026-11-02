@@ -1,0 +1,7 @@
+- id: slopcheck
+  name: slopcheck
+  description: Catch hallucinated packages, typosquats, leaked secrets and insecure AI-written code.
+  entry: slopcheck
+  language: python
+  pass_filenames: false
+  args: ["."]

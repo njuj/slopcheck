@@ -7,6 +7,8 @@
 ![deps](https://img.shields.io/badge/dependencies-0-00ff9c?labelColor=0b0f17)
 ![license](https://img.shields.io/badge/license-MIT-00ff9c?labelColor=0b0f17)
 
+<p align="center"><img src="docs/demo.svg" width="100%" alt="slopcheck running in a terminal"/></p>
+
 ## The problem: slopsquatting
 
 LLMs regularly recommend packages that **do not exist**. In [a study of 576,000 code samples from 16 models](https://arxiv.org/abs/2406.10279), almost 20% of the recommended packages were hallucinated, and the same fake names came back again and again. Repeated fake names are predictable, so an attacker can register them on PyPI or npm and wait for someone to paste `pip install` from a chat window. The attack is called **slopsquatting**.

@@ -231,7 +231,8 @@ class ProjectTest(unittest.TestCase):
         stub = mock.Mock()
         stub.lookup_all.return_value = {("pypi", "reqeusts"): PackageInfo(exists=False),
                                         ("pypi", "flask-auth-magic"): PackageInfo(True, NOW - timedelta(days=2), 1)}
-        report = scan(self.root, online=True, registry=stub)
+        no_advisories = mock.Mock(query=mock.Mock(return_value={}), details=mock.Mock(return_value={}))
+        report = scan(self.root, online=True, registry=stub, osv_client=no_advisories)
         looked_up = [d.name for d in stub.lookup_all.call_args.args[0]]
         self.assertEqual(looked_up, ["reqeusts", "flask-auth-magic"])  # popular `requests` needs no lookup
         self.assertEqual([(f.subject, f.severity) for f in report.findings],

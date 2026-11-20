@@ -26,7 +26,8 @@ def build_parser() -> argparse.ArgumentParser:
         description="Catch hallucinated packages, typosquats, leaked secrets and the classic security slips of "
                     "AI-written code.")
     ap.add_argument("path", nargs="?", default=".", type=Path, help="project directory (default: .)")
-    ap.add_argument("--offline", action="store_true", help="skip registry lookups; name and code checks only")
+    ap.add_argument("--offline", action="store_true",
+                    help="no network: skip the registry and OSV.dev lookups; name, secret and code checks only")
     ap.add_argument("--fail-on", choices=SEVERITIES, default="high",
                     help="lowest severity that makes the exit code 1 (default: high)")
     ap.add_argument("--exclude", action="append", default=[], metavar="GLOB",
@@ -52,7 +53,8 @@ def render(report: Report, elapsed: float, color: bool, g: dict) -> str:
     sep = f"  {g['sep']}  "
     mode = "online" if report.online else "offline"
     lines = [paint(f" slopcheck v{__version__}", "1;35") + paint(
-        f"{sep}{len(report.dependencies)} dependencies{sep}{report.files_scanned} files{sep}{mode}{sep}{elapsed:.1f}s",
+        f"{sep}{len(report.dependencies)} dependencies" + (f" + {len(report.locked)} locked" if report.locked else "") +
+        f"{sep}{report.files_scanned} files{sep}{mode}{sep}{elapsed:.1f}s",
         "2"), ""]
     for category, heading in SECTIONS:
         items = [f for f in report.findings if f.category == category]
@@ -90,6 +92,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.json:
         print(json.dumps({"version": __version__, "root": report.root, "online": report.online,
                           "dependencies": [asdict(d) for d in report.dependencies],
+                          "locked": [asdict(d) for d in report.locked],
                           "findings": [asdict(f) for f in report.findings]}, indent=2))
     else:
         if hasattr(sys.stdout, "reconfigure"):

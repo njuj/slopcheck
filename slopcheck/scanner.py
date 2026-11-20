@@ -5,10 +5,12 @@ from __future__ import annotations
 import fnmatch
 import json
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from . import deps as dep_checks
+from . import osv
+from .lockfiles import is_lockfile, parse_lockfile
 from .manifests import is_manifest, parse_manifest
 from .model import Dependency, Finding, rank
 from .names import is_popular
@@ -28,6 +30,7 @@ class Report:
     root: str
     files_scanned: int = 0
     dependencies: list[Dependency] = field(default_factory=list)
+    locked: list[Dependency] = field(default_factory=list)   # every package a lockfile pins
     findings: list[Finding] = field(default_factory=list)
     online: bool = True
 
@@ -113,7 +116,7 @@ def scan_code(path: Path, rel: str) -> list[Finding]:
 
 
 def scan(root: Path, *, online: bool = True, exclude: list[str] | None = None,
-         registry: Registry | None = None) -> Report:
+         registry: Registry | None = None, osv_client: "osv.OSV | None" = None) -> Report:
     root = root.resolve()
     exclude = exclude or []
     report = Report(root=str(root), online=online)
@@ -123,6 +126,11 @@ def scan(root: Path, *, online: bool = True, exclude: list[str] | None = None,
                 report.dependencies += parse_manifest(path, rel)
             except (ValueError, OSError) as e:  # broken JSON / TOML
                 report.findings.append(Finding("low", "config", "could not parse manifest", rel, 1, str(e)))
+        elif is_lockfile(path):
+            try:
+                report.locked += parse_lockfile(path, rel)
+            except (ValueError, OSError) as e:
+                report.findings.append(Finding("low", "config", "could not parse lockfile", rel, 1, str(e)))
         report.files_scanned += 1
         if is_env_file(path):
             if _gitignore_covers(root, rel):
@@ -132,10 +140,26 @@ def scan(root: Path, *, online: bool = True, exclude: list[str] | None = None,
                                            "add `.env` to .gitignore and commit a `.env.example` instead"))
         report.findings += scan_code(path, rel)
 
+    # a direct dependency without a pinned version takes the version its lockfile installs; one the lockfile
+    # takes from a path or git (the project itself, a workspace member) is not a registry package either
+    locked = {}
+    for d in report.locked:
+        locked.setdefault((d.ecosystem, osv.canonical(d.name, d.ecosystem)), d)
+    for i, d in enumerate(report.dependencies):
+        lock = locked.get((d.ecosystem, osv.canonical(d.name, d.ecosystem)))
+        if lock and not d.version:
+            report.dependencies[i] = replace(d, version=lock.version, from_registry=d.from_registry and lock.from_registry)
+
     # popular packages are known to exist and to be what they claim: no need to ask the registry
     to_check = [d for d in report.dependencies if d.from_registry and not is_popular(d.name, d.ecosystem)]
     infos = (registry or Registry()).lookup_all(to_check) if online and to_check else {}
     for dep in report.dependencies:
         report.findings += dep_checks.assess(dep, infos.get((dep.ecosystem, dep.name)) if online else None)
+    if online:
+        advisories = osv.check(report.dependencies + report.locked, osv_client)
+        # known malware says it all: drop the softer guesses ("similar to ...") about the same package
+        malware = {f.subject for f in advisories if f.title == "known malicious package"}
+        report.findings = [f for f in report.findings if not (f.category == "dependency" and f.subject in malware)]
+        report.findings += advisories
     report.findings.sort(key=lambda f: (-rank(f.severity), f.category != "dependency", f.file, f.line))
     return report

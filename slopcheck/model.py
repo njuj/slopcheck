@@ -17,6 +17,8 @@ class Dependency:
     file: str
     line: int
     from_registry: bool = True  # False for git / file / workspace / URL specs
+    version: str | None = None  # exact version when pinned or locked
+    direct: bool = True         # False: found only in a lockfile (a dependency of a dependency, or locked)
 
 
 @dataclass

@@ -22,6 +22,15 @@ def is_requirements_file(path: Path) -> bool:
     return name.endswith(".txt") and (name.startswith("requirements") or path.parent.name == "requirements")
 
 
+_PIN = re.compile(r"==\s*([0-9][\w.+!-]*)\s*(?:[;,#]|$)")
+_NPM_EXACT = re.compile(r"^=?v?(\d+\.\d+\.\d+(?:[-+][\w.+-]*)?)$")
+
+
+def pinned_version(spec: str) -> str | None:
+    m = _PIN.search(spec.split("#", 1)[0].strip())
+    return m.group(1) if m and "*" not in m.group(1) else None
+
+
 def parse_requirement(spec: str) -> tuple[str, bool] | None:
     """(name, comes-from-registry) for one PEP 508 string, or None if it names no package."""
     spec = spec.split("#", 1)[0].strip()
@@ -39,7 +48,7 @@ def parse_requirements(text: str, file: str) -> list[Dependency]:
     for lineno, line in enumerate(text.splitlines(), 1):
         parsed = parse_requirement(line)
         if parsed:
-            deps.append(Dependency(parsed[0], "pypi", file, lineno, parsed[1]))
+            deps.append(Dependency(parsed[0], "pypi", file, lineno, parsed[1], version=pinned_version(line)))
     return deps
 
 
@@ -60,7 +69,8 @@ def parse_pyproject(text: str, file: str) -> list[Dependency]:
     for spec in specs:
         parsed = parse_requirement(spec)
         if parsed:
-            deps.append(Dependency(parsed[0], "pypi", file, _line_of(text, parsed[0]), parsed[1]))
+            deps.append(Dependency(parsed[0], "pypi", file, _line_of(text, parsed[0]), parsed[1],
+                                   version=pinned_version(spec)))
     poetry = doc.get("tool", {}).get("poetry", {})
     tables = [poetry.get("dependencies", {}), poetry.get("dev-dependencies", {})]
     tables += [g.get("dependencies", {}) for g in poetry.get("group", {}).values()]
@@ -80,7 +90,9 @@ def parse_package_json(text: str, file: str) -> list[Dependency]:
         for name, version in (doc.get(section) or {}).items():
             version = str(version)
             from_registry = not (version.startswith(_NON_REGISTRY_NPM) or _GITHUB_SHORTHAND.match(version))
-            deps.append(Dependency(name, "npm", file, _line_of(text, f'"{name}"'), from_registry))
+            exact = _NPM_EXACT.match(version.strip())
+            deps.append(Dependency(name, "npm", file, _line_of(text, f'"{name}"'), from_registry,
+                                   version=exact.group(1) if exact else None))
     return deps
 
 

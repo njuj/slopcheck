@@ -1,6 +1,6 @@
 # slopcheck
 
-[![Part of Cryptid Security](https://img.shields.io/badge/part_of-Cryptid%20Security-00ff9c?style=flat-square&labelColor=0d1117)](https://github.com/cryptid-security)
+[![Part of Cryptid Security](https://img.shields.io/badge/part_of-Cryptid%20Security-c6922f?style=flat-square&labelColor=0c1411)](https://github.com/cryptid-security)
 
 **Catch what AI coding assistants get wrong before it ships:** packages that don't exist, look-alikes of popular libraries, packages already known to be malware, vulnerable versions deep in your lockfile, leaked API keys, and the security slips that appear in generated code again and again. One command. Zero dependencies.
 
